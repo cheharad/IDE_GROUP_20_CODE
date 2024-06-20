@@ -1,0 +1,94 @@
+const int buttonPin = 2; //initialise the buttonpin
+const int motorPin = 5; //initialise the motorpin
+
+volatile bool buttonPressed = false; // Flag variable for button press detection
+
+int modeState = LOW;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+
+enum vibrationMode {OFF, ON, SLOW_BLINK, SINE_PULSE};
+vibrationMode currentMode = OFF;
+
+bool sinePulseRunning = false; // Flag variable to indicate if sine pulse is running
+
+unsigned long previousMillis = 0;
+const long slowInterval = 750;
+
+float sineAngle = 0; // Current angle for sine pulse
+const float angleIncrement = 0.1; // Angle increment for sine pulse
+const unsigned long sineInterval = 10; // Time interval for updating sine pulse
+unsigned long lastSineUpdate = 0; // Last update time for sine pulse
+
+void setup() {
+  pinMode(buttonPin, INPUT); 
+  pinMode(motorPin, OUTPUT);
+  digitalWrite(motorPin, LOW);
+
+  attachInterrupt(digitalPinToInterrupt(buttonPin), buttonISR, FALLING); // Attached interrupt to buttonPin
+}
+
+void loop() {
+  if (buttonPressed) {
+    buttonPressed = false; // Resets buttonPressed flag
+    buttonClicks(); // Call the function to handle button click
+  }
+
+  unsigned long currentMillis = millis();
+// digital writes the motorpin depending on the case
+  switch(currentMode) {
+    case OFF:
+      digitalWrite(motorPin, LOW);
+      break;
+    case ON:
+      digitalWrite(motorPin, HIGH);
+      break;
+    case SLOW_BLINK:
+      if (currentMillis - previousMillis >= slowInterval) {
+        previousMillis = currentMillis;
+        modeState = !modeState;
+        digitalWrite(motorPin, modeState);
+      }
+      break;
+    case SINE_PULSE:
+      if (sinePulseRunning) {
+        if (currentMillis - lastSineUpdate >= sineInterval) {
+          lastSineUpdate = currentMillis;
+          float intensity = sin(sineAngle) * 127 + 128;
+          analogWrite(motorPin, intensity);
+          sineAngle += angleIncrement;
+          if (sineAngle >= 2 * PI) {
+            sineAngle = 0; // Reset the angle to start a new sine wave cycle
+          }
+        }
+      }
+      break;
+  }
+}
+// ISR for the button is called from this function
+void buttonISR() {
+  if (millis() - lastDebounceTime > debounceDelay) {
+    lastDebounceTime = millis();
+    buttonPressed = true; // Set the flag to indicate button press
+  }
+}
+// States the order of cases the button cycles through when pressed
+void buttonClicks() {
+  switch(currentMode) {
+    case OFF:
+      currentMode = ON;
+      break;
+    case ON:
+      currentMode = SLOW_BLINK;
+      break;
+    case SLOW_BLINK:
+      currentMode = SINE_PULSE;
+      sinePulseRunning = true; // Start the sine pulse
+      sineAngle = 0; // Reset sine wave angle
+      break;
+    case SINE_PULSE:
+      currentMode = OFF;
+      sinePulseRunning = false; // Stop the sine pulse
+      break;
+  }
+}
